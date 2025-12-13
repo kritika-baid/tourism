@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
-from huggingface_hub import hf_hub_download
 import joblib
+from huggingface_hub import hf_hub_download
 
-# ------------------ CONFIG ------------------
+# ---------------- CONFIG ----------------
 MODEL_REPO = "kritika25/tourismmodel"
 MODEL_FILE = "best_model.joblib"
 DATASET_REPO = "kritika25/tourismproject"
 TRAIN_CSV = "Xtrain.csv"
+LABEL_ENCODERS_FILE = "label_encoders.joblib"
 
 st.set_page_config(page_title="Tourism Conversion Predictor", page_icon="🌍", layout="wide")
 st.title("🌍 Tourism Package Conversion Predictor")
@@ -16,63 +17,55 @@ st.markdown(
     "based on their profile, interactions, and financial details."
 )
 
-# ------------------ LOAD MODEL ------------------
+# ---------------- LOAD MODEL ----------------
 model_path = hf_hub_download(repo_id=MODEL_REPO, filename=MODEL_FILE, repo_type="model")
 model = joblib.load(model_path)
 
-# ------------------ LOAD TRAINING CSV ------------------
+# ---------------- LOAD TRAINING CSV ----------------
 train_csv_path = hf_hub_download(repo_id=DATASET_REPO, filename=TRAIN_CSV, repo_type="dataset")
 train_df = pd.read_csv(train_csv_path)
 
+# ---------------- LOAD LABEL ENCODERS ----------------
+encoders_path = hf_hub_download(repo_id=MODEL_REPO, filename=LABEL_ENCODERS_FILE, repo_type="model")
+label_encoders = joblib.load(encoders_path)
+
 # Identify numeric and categorical columns
 numeric_cols = train_df.select_dtypes(include=["int64", "float64"]).columns.tolist()
-categorical_cols = train_df.select_dtypes(include=["object"]).columns.tolist()
+categorical_cols = list(label_encoders.keys())
 
-# ------------------ SIDEBAR INPUT ------------------
+# ---------------- SIDEBAR INPUT ----------------
 st.sidebar.header("Customer Input")
 input_data = {}
 
-# Numeric sliders with dynamic min/max from training CSV
+# Numeric inputs with min/max from training data
 for col in numeric_cols:
     min_val = int(train_df[col].min())
     max_val = int(train_df[col].max())
     mean_val = int(train_df[col].mean())
     input_data[col] = st.sidebar.number_input(col, min_value=min_val, max_value=max_val, value=mean_val, step=1)
 
-# Categorical dropdowns from training CSV
+# Categorical dropdowns
 for col in categorical_cols:
-    options = sorted(train_df[col].dropna().unique())
+    options = sorted([str(cls) for cls in label_encoders[col].classes_])
     input_data[col] = st.sidebar.selectbox(col, options, index=0)
 
 input_df = pd.DataFrame([input_data])
 
-# ------------------ MAIN UI TABS ------------------
-tab1, tab2, tab3 = st.tabs(["Personal Info", "Interaction Info", "Financial Info"])
+# ---------------- APPLY LABEL ENCODERS ----------------
+for col in categorical_cols:
+    le = label_encoders[col]
+    input_df[col] = le.transform([input_df[col][0]])
 
-with tab1:
-    st.subheader("Personal Information")
-    personal_cols = ["Age", "Gender", "MaritalStatus", "NumberOfChildrenVisiting"]
-    personal_cols = [c for c in personal_cols if c in input_df.columns]
-    st.dataframe(input_df[personal_cols].T.rename(columns={0:"Input"}))
+# Ensure numeric columns are float
+input_df[numeric_cols] = input_df[numeric_cols].astype(float)
 
-with tab2:
-    st.subheader("Interaction Information")
-    interaction_cols = ["TypeofContact", "CityTier", "DurationOfPitch",
-                        "Occupation", "NumberOfPersonVisiting", "NumberOfFollowups",
-                        "ProductPitched", "PreferredPropertyStar", "PitchSatisfactionScore",
-                        "Designation"]
-    interaction_cols = [c for c in interaction_cols if c in input_df.columns]
-    st.dataframe(input_df[interaction_cols].T.rename(columns={0:"Input"}))
-
-with tab3:
-    st.subheader("Financial Information")
-    financial_cols = ["MonthlyIncome", "Passport", "ProdTaken", "NumberOfTrips", "OwnCar"]
-    financial_cols = [c for c in financial_cols if c in input_df.columns]
-    st.dataframe(input_df[financial_cols].T.rename(columns={0:"Input"}))
+# ---------------- DISPLAY INPUTS ----------------
+st.subheader("Customer Input Summary")
+st.dataframe(input_df.T.rename(columns={0:"Input"}))
 
 st.markdown("---")
 
-# ------------------ PREDICTION ------------------
+# ---------------- PREDICTION ----------------
 if st.button("Predict Conversion"):
     try:
         prediction = model.predict(input_df)[0]
