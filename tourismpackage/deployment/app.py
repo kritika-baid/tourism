@@ -48,17 +48,28 @@ DROPDOWNS = {
     "OwnCar": [0, 1],
 }
 
-# ---------------- INPUTS ----------------
+# ------------------ SIDEBAR INPUT ------------------
 st.sidebar.header("Customer Information")
+
+ENCODED_DROPDOWNS = {
+    "Gender": {"Female": 0, "Male": 1},
+    "TypeofContact": {"Self Enquiry": 0, "Company Invited": 1},
+    "Occupation": {"Salaried": 0, "Small Business": 1, "Free Lancer": 2},
+    "ProductPitched": {"Basic": 0, "Standard": 1, "Deluxe": 2},
+    "MaritalStatus": {"Single": 0, "Married": 1, "Divorced": 2, "Unmarried": 3},
+}
+
 input_data = {}
 
 for col in expected_cols:
-    if col in DROPDOWNS:
-        input_data[col] = st.sidebar.selectbox(col, DROPDOWNS[col])
+    if col in ENCODED_DROPDOWNS:
+        label = st.sidebar.selectbox(col, list(ENCODED_DROPDOWNS[col].keys()))
+        input_data[col] = ENCODED_DROPDOWNS[col][label]
     else:
-        input_data[col] = st.sidebar.number_input(col, min_value=0, value=0, step=1)
+        input_data[col] = st.sidebar.number_input(col, min_value=0, value=0)
 
 input_df = pd.DataFrame([input_data])
+
 
 # ---------------- PREDICTION ----------------
 st.markdown("---")
