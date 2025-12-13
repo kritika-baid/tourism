@@ -3,15 +3,23 @@ import pandas as pd
 from huggingface_hub import hf_hub_download
 import joblib
 
-#  Load Model From Hugging Face
-
+# ------------------ CONFIG ------------------
 MODEL_REPO = "kritika25/tourismmodel"
 MODEL_FILE = "best_model.joblib"
 
-st.title("Tourism Customer Conversion Prediction App")
-st.write("Predict whether a customer will purchase the tourism package.")
+st.set_page_config(
+    page_title="Tourism Conversion Predictor",
+    page_icon="🌍",
+    layout="centered"
+)
 
-# Download model
+# ------------------ LOAD MODEL ------------------
+st.title("🌍 Tourism Package Conversion Prediction")
+st.markdown(
+    "This app predicts whether a customer is **likely to purchase a tourism package** "
+    "based on their profile and interaction details."
+)
+
 model_path = hf_hub_download(
     repo_id=MODEL_REPO,
     filename=MODEL_FILE,
@@ -19,55 +27,73 @@ model_path = hf_hub_download(
 )
 
 model = joblib.load(model_path)
-
-
 FEATURES = list(model.feature_names_in_)
 
-st.sidebar.header("Enter Customer Details")
+# ------------------ SIDEBAR INPUT ------------------
+st.sidebar.header("🧾 Customer Information")
 
 def user_input():
-    values = {}
+    data = {}
 
+    st.sidebar.subheader("👤 Personal Details")
+    data["Age"] = st.sidebar.slider("Age", 18, 80, 30)
+    data["Gender"] = st.sidebar.selectbox("Gender", ["Male", "Female"])
+    data["MaritalStatus"] = st.sidebar.selectbox(
+        "Marital Status", ["Single", "Married", "Divorced"]
+    )
+
+    st.sidebar.subheader("🌆 Location & Travel")
+    data["CityTier"] = st.sidebar.selectbox("City Tier", [1, 2, 3])
+    data["NumberOfTrips"] = st.sidebar.slider("Number of Trips", 0, 20, 2)
+    data["Passport"] = st.sidebar.selectbox("Has Passport?", ["No", "Yes"])
+
+    st.sidebar.subheader("📞 Sales Interaction")
+    data["DurationOfPitch"] = st.sidebar.slider("Pitch Duration (mins)", 0, 60, 10)
+    data["NumberOfFollowups"] = st.sidebar.slider("Follow-ups", 0, 10, 2)
+    data["PitchSatisfactionScore"] = st.sidebar.selectbox(
+        "Pitch Satisfaction Score", [1, 2, 3, 4, 5]
+    )
+
+    st.sidebar.subheader("💰 Financial Details")
+    data["MonthlyIncome"] = st.sidebar.number_input(
+        "Monthly Income", min_value=5000, max_value=300000, value=50000
+    )
+    data["OwnCar"] = st.sidebar.selectbox("Owns a Car?", ["No", "Yes"])
+
+    # ------------------ ENCODING ------------------
+    data["Gender"] = 1 if data["Gender"] == "Male" else 0
+    data["Passport"] = 1 if data["Passport"] == "Yes" else 0
+    data["OwnCar"] = 1 if data["OwnCar"] == "Yes" else 0
+
+    # Fill missing model features safely
+    final_data = {}
     for col in FEATURES:
-        # Numeric fields
-        if any(keyword in col.lower() for keyword in 
-               ["age", "duration", "number", "monthly", "income", "score"]):
-            values[col] = st.sidebar.number_input(col, min_value=0, value=1)
+        final_data[col] = data.get(col, 0)
 
-        # Binary yes/no
-        elif any(keyword in col.lower() for keyword in 
-                 ["passport", "owncar", "owns_car", "car"]):
-            values[col] = st.sidebar.selectbox(col, [0, 1])
-
-        # Gender
-        elif col.lower() == "gender":
-            gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
-            values[col] = 1 if gender == "Male" else 0
-
-        # Generic categorical fields
-        else:
-            values[col] = st.sidebar.text_input(col, "")
-
-    return pd.DataFrame([values])
+    return pd.DataFrame([final_data])
 
 input_df = user_input()
 
+# ------------------ PREDICTION ------------------
+st.markdown("---")
 
-if st.button("Predict"):
-    try:
-        prediction = model.predict(input_df)[0]
-        probability = model.predict_proba(input_df)[0][1]
+if st.button("🔮 Predict Conversion"):
+    prediction = model.predict(input_df)[0]
+    probability = model.predict_proba(input_df)[0][1]
 
-        st.subheader("🔍 Prediction Result")
+    st.subheader("📊 Prediction Result")
 
-        if prediction == 1:
-            st.success(f"Customer WILL take the package (Probability: {probability:.2f})")
-        else:
-            st.error(f" Customer will NOT take the package (Probability: {probability:.2f})")
+    if prediction == 1:
+        st.success(
+            f"✅ **Customer is likely to purchase the package**\n\n"
+            f"📈 Probability: **{probability:.2%}**"
+        )
+    else:
+        st.error(
+            f" **Customer is unlikely to purchase the package**\n\n"
+            f"📉 Probability: **{probability:.2%}**"
+        )
 
-    except Exception as e:
-        st.error(f"Prediction error: {e}")
-
-
-st.subheader(" User Input Summary")
-st.write(input_df)
+# ------------------ DEBUG VIEW ------------------
+with st.expander("🔍 View Model Input Data"):
+    st.dataframe(input_df)
