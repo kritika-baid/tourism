@@ -9,6 +9,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
@@ -143,7 +144,12 @@ for name, cfg in models.items():
 
 print(f"\n Best Model = {best_name} | Accuracy = {best_score}")
 
-joblib.dump(best_model, "best_model.joblib")
+final_pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", best_model)
+])
+
+joblib.dump(final_pipeline, "best_model.joblib")
 
 api.upload_file(
     path_or_fileobj="best_model.joblib",
