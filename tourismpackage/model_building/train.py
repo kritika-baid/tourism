@@ -9,7 +9,6 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import make_pipeline
-from sklearn.pipeline import Pipeline
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
@@ -20,7 +19,7 @@ from huggingface_hub.utils import RepositoryNotFoundError
 
 # ------------------------ CONFIG ------------------------
 
-HF_TOKEN = os.getenv("HF_TOKEN")   # MUST be set in Colab
+HF_TOKEN = os.getenv("HF_TOKEN")   # MUST be set in environment
 DATA_REPO = "kritika25/tourismproject"
 MODEL_REPO = "kritika25/tourismmodel"
 
@@ -35,11 +34,7 @@ try:
     print("✓ Model repo exists")
 except RepositoryNotFoundError:
     print("✗ Model repo missing → creating...")
-    api.create_repo(
-        repo_id=MODEL_REPO,
-        repo_type="model",
-        private=False
-    )
+    api.create_repo(repo_id=MODEL_REPO, repo_type="model", private=False)
     print("✓ Model repo created!")
 
 
@@ -61,7 +56,7 @@ ytest  = pd.read_csv(f"hf://datasets/{DATA_REPO}/ytest.csv")
 print("✓ Data loaded successfully!")
 
 
-# ------------------------ PIPELINE ------------------------
+# ------------------------ PREPROCESSING ------------------------
 
 numeric_cols = Xtrain.select_dtypes(include=['int64', 'float64']).columns.tolist()
 categorical_cols = Xtrain.select_dtypes(include=['object']).columns.tolist()
@@ -76,7 +71,7 @@ preprocessor = ColumnTransformer(
 print("✓ Preprocessing pipeline created!")
 
 
-# ------------------------ MODELS ------------------------
+# ------------------------ MODEL CONFIG ------------------------
 
 models = {
     "decision_tree": {
@@ -104,12 +99,10 @@ best_name = ""
 # ------------------------ TRAINING LOOP ------------------------
 
 for name, cfg in models.items():
-
     with mlflow.start_run(run_name=name):
+        print(f"\nTraining Model: {name}")
 
-        print(f"\n Training Model: {name}")
-
-        # FULL PIPELINE = preprocess + model
+        # Pipeline = preprocess + model
         pipe = make_pipeline(preprocessor, cfg["model"])
 
         grid = GridSearchCV(
@@ -120,11 +113,10 @@ for name, cfg in models.items():
         )
 
         grid.fit(Xtrain, ytrain.values.ravel())
-
         preds = grid.predict(Xtest)
         acc = accuracy_score(ytest, preds)
 
-        # Log best params + metrics
+        # Log params & metrics
         mlflow.log_params(grid.best_params_)
         mlflow.log_metric("accuracy", acc)
 
@@ -136,21 +128,18 @@ for name, cfg in models.items():
             best_model = grid.best_estimator_
             best_name = name
 
-        # Save model in MLflow
+        # Log model in MLflow
         mlflow.sklearn.log_model(grid.best_estimator_, name)
 
 
 # ------------------------ SAVE + UPLOAD BEST MODEL ------------------------
 
-print(f"\n Best Model = {best_name} | Accuracy = {best_score}")
+print(f"\nBest Model = {best_name} | Accuracy = {best_score}")
 
-final_pipeline = Pipeline([
-    ("preprocessor", preprocessor),
-    ("model", best_model)
-])
+# Save the already fitted pipeline
+joblib.dump(best_model, "best_model.joblib")
 
-joblib.dump(final_pipeline, "best_model.joblib")
-
+# Upload to HuggingFace Hub
 api.upload_file(
     path_or_fileobj="best_model.joblib",
     path_in_repo="best_model.joblib",
@@ -158,4 +147,4 @@ api.upload_file(
     repo_type="model"
 )
 
-print( "Best model successfully uploaded to HuggingFace Hub!")
+print("Best model successfully uploaded to HuggingFace Hub!")
