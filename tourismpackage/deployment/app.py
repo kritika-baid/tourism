@@ -62,11 +62,26 @@ ENCODED_DROPDOWNS = {
 input_data = {}
 
 for col in expected_cols:
-    if col in ENCODED_DROPDOWNS:
-        label = st.sidebar.selectbox(col, list(ENCODED_DROPDOWNS[col].keys()))
-        input_data[col] = ENCODED_DROPDOWNS[col][label]
+
+    # AGE with minimum value
+    if col == "Age":
+        input_data[col] = st.sidebar.number_input(
+            "Age",
+            min_value=18,
+            max_value=100,
+            value=30
+        )
+
+    # Other numeric fields
+    elif col in numeric_cols:
+        input_data[col] = st.sidebar.number_input(
+            col,
+            value=0
+        )
+
+    # Categorical fields (already handled via dropdowns earlier)
     else:
-        input_data[col] = st.sidebar.number_input(col, min_value=0, value=0)
+        input_data[col] = st.sidebar.text_input(col, "Unknown")
 
 input_df = pd.DataFrame([input_data])
 
